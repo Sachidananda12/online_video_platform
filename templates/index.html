@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WebRTC Video Chat</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  body { 
+    font-family: 'Inter', sans-serif; 
+    background: linear-gradient(135deg, #e0e7ff, #c7d2fe); 
+    margin: 0; 
+    overflow-x: hidden; 
+    color: #333; 
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Room join */
+  #roomPrompt { 
+    max-width: 90%; 
+    width: 400px;
+    margin: 20px auto; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 12px; 
+    background: white; 
+    padding: 20px; 
+    border-radius: 15px; 
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15); 
+    animation: slideUp 0.5s ease-out; 
+    border: 1px solid #e5e7eb;
+  }
+  #roomPrompt input { 
+    width: 100%; 
+    padding: 12px 15px; 
+    border-radius: 12px; 
+    border: 1px solid #d1d5db; 
+    font-size: 1rem; 
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+    box-sizing: border-box;
+  }
+  #roomPrompt input:focus { 
+    outline: none; 
+    border-color: #6366f1; 
+    box-shadow: 0 0 10px rgba(99,102,241,0.4); 
+  }
+  #roomPrompt button { 
+    padding: 12px 20px; 
+    border: none; 
+    border-radius: 12px; 
+    background: linear-gradient(90deg, #6366f1, #3b82f6); 
+    color: white; 
+    cursor: pointer; 
+    font-weight: 600; 
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 8px; 
+  }
+  #roomPrompt button:hover { 
+    background: linear-gradient(90deg, #4f46e5, #2563eb); 
+    transform: translateY(-2px) scale(1.05); 
+    box-shadow: 0 4px 12px rgba(99,102,241,0.4); 
+  }
+  #roomPrompt button svg {
+    width: 18px;
+    height: 18px;
+    fill: white;
+    transition: transform 0.3s ease;
+  }
+  #roomPrompt button:hover svg {
+    transform: scale(1.1);
+  }
+
+  /* Main container */
+  #mainContainer { 
+    display: none; 
+    max-width: 95%; 
+    width: 1200px;
+    margin: 20px auto; 
+    position: relative; 
+    padding: 20px; 
+    background: white; 
+    border-radius: 20px; 
+    box-shadow: 0 15px 40px rgba(0,0,0,0.1); 
+    margin-bottom: 80px; 
+    animation: slideUp 0.6s ease-out; 
+    border: 1px solid #e5e7eb;
+  }
+
+  /* Video container using proper CSS Grid */
+  #videoGrid { 
+    display: grid; 
+    grid-template-columns: repeat(2, 1fr); 
+    gap: 20px; 
+  }
+  .videoWrapper { 
+    position: relative; 
+    overflow: hidden; 
+    border-radius: 15px; 
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2); 
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+    border: 1px solid #d1d5db;
+  }
+  .videoWrapper:hover { 
+    transform: scale(1.02); 
+  }
+  video { 
+    width: 100%; 
+    height: auto; 
+    background: #111; 
+    display: block; 
+    transition: opacity 0.3s ease; 
+  }
+
+  /* Video labels */
+  .videoLabel { 
+    position: absolute; 
+    bottom: 15px; 
+    left: 15px; 
+    background: rgba(0,0,0,0.7); 
+    color: #fff; 
+    padding: 5px 10px; 
+    border-radius: 8px; 
+    font-weight: 600; 
+    font-size: 0.9rem; 
+    pointer-events: none; 
+    z-index: 10; 
+    transition: background 0.3s ease; 
+  }
+
+  /* Video controls overlay */
+  #videoControls { 
+    position: fixed; 
+    bottom: 20px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    display: flex; 
+    flex-wrap: nowrap; 
+    gap: 15px; 
+    z-index: 10; 
+    background: rgba(255,255,255,0.2); 
+    padding: 12px 20px; 
+    border-radius: 30px; 
+    backdrop-filter: blur(15px); 
+    box-shadow: 0 8px 25px rgba(0,0,0,0.2); 
+    animation: fadeIn 0.5s ease-out; 
+    border: 1px solid rgba(255,255,255,0.3);
+  }
+  #videoControls button {
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 50%;
+    background: linear-gradient(145deg, rgba(99,102,241,0.9), rgba(59,130,246,0.9));
+    color: white;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border: none;
+    position: relative;
+    overflow: hidden;
+  }
+  #videoControls button::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 150%;
+    height: 150%;
+    background: rgba(255,255,255,0.2);
+    transform: translate(-50%, -50%) scale(0);
+    border-radius: 50%;
+    transition: transform 0.3s ease;
+  }
+  #videoControls button:hover::before {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  #videoControls button:hover { 
+    transform: scale(1.1); 
+    box-shadow: 0 4px 12px rgba(99,102,241,0.4); 
+  }
+  #videoControls button svg { 
+    width: 24px; 
+    height: 24px; 
+    fill: white; 
+    transition: transform 0.3s ease; 
+  }
+  #videoControls button:hover svg {
+    transform: scale(1.1);
+  }
+
+  /* Slide-in Chat */
+  #chat { 
+    position: fixed; 
+    top: 0; 
+    right: -100%; 
+    width: 100%; 
+    max-width: 360px; 
+    height: 100%; 
+    background: rgba(255,255,255,0.98); 
+    backdrop-filter: blur(20px); 
+    border-left: 2px solid #e5e7eb; 
+    box-shadow: -8px 0 30px rgba(0,0,0,0.15); 
+    padding: 20px; 
+    transition: right 0.5s cubic-bezier(0.4, 0, 0.2, 1); 
+    z-index: 15; 
+    display: flex; 
+    flex-direction: column; 
+    border-left: 1px solid #d1d5db;
+  }
+  #chat.open { right: 0; }
+  #chat h3 { 
+    margin: 0 0 15px; 
+    color: #6366f1; 
+    font-weight: 700; 
+    font-size: 1.3rem; 
+    animation: fadeIn 0.5s ease-out; 
+  }
+
+  #messages { 
+    flex: 1; 
+    overflow-y: auto; 
+    padding: 15px; 
+    border-radius: 12px; 
+    background: #f9fafb; 
+    scroll-behavior: smooth; 
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.05); 
+    border: 1px solid #e5e7eb;
+  }
+  #messages p { 
+    margin: 10px 0; 
+    padding: 10px 15px; 
+    border-radius: 12px; 
+    display: flex; 
+    flex-direction: column; 
+    word-wrap: break-word; 
+    max-width: 85%; 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+    transition: transform 0.3s ease, background 0.3s ease; 
+  }
+  #messages p:hover {
+    transform: translateY(-2px);
+  }
+  #messages p.self { 
+    background: linear-gradient(90deg, #6366f1, #3b82f6); 
+    color: white; 
+    align-self: flex-end; 
+    text-align: right; 
+  }
+  #messages p.other { 
+    background: #f3f4f6; 
+    color: #333; 
+    align-self: flex-start; 
+    text-align: left; 
+  }
+
+  #messages span.username { 
+    font-weight: 700; 
+    margin-bottom: 3px; 
+  }
+  #messages span.timestamp { 
+    font-size: 0.7rem; 
+    color: #6b7280; 
+    margin-top: 3px; 
+  }
+
+  #chatInputArea { 
+    margin-top: 15px; 
+    display: flex; 
+    gap: 12px; 
+    background: #f9fafb; 
+    padding: 10px; 
+    border-radius: 12px; 
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
+    border: 1px solid #e5e7eb;
+  }
+  #chatInput { 
+    flex: 1; 
+    padding: 10px 15px; 
+    border-radius: 10px; 
+    border: 1px solid #d1d5db; 
+    font-size: 0.9rem; 
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+  }
+  #chatInput:focus { 
+    outline: none; 
+    border-color: #6366f1; 
+    box-shadow: 0 0 8px rgba(99,102,241,0.3); 
+  }
+  #chatSendBtn { 
+    padding: 10px 20px; 
+    border: none; 
+    border-radius: 10px; 
+    background: linear-gradient(90deg, #6366f1, #3b82f6); 
+    color: white; 
+    font-weight: 600; 
+    cursor: pointer; 
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+    display: flex; 
+    align-items: center; 
+    gap: 6px; 
+  }
+  #chatSendBtn:hover { 
+    background: linear-gradient(90deg, #4f46e5, #2563eb); 
+    transform: translateY(-2px) scale(1.05); 
+    box-shadow: 0 4px 10px rgba(99,102,241,0.3); 
+  }
+  #chatSendBtn svg {
+    width: 18px;
+    height: 18px;
+    fill: white;
+    transition: transform 0.3s ease;
+  }
+  #chatSendBtn:hover svg {
+    transform: scale(1.1);
+  }
+
+  @media(max-width: 768px){
+    #videoGrid { 
+      grid-template-columns: 1fr; 
+      gap: 15px; 
+    }
+    .videoWrapper { 
+      margin-bottom: 15px; 
+    }
+    .videoLabel {
+      font-size: 0.8rem;
+      padding: 4px 8px;
+      bottom: 10px;
+      left: 10px;
+    }
+    #videoControls { 
+      flex-direction: row; 
+      flex-wrap: wrap; 
+      justify-content: center; 
+      gap: 10px; 
+      padding: 10px; 
+      width: auto; 
+      max-width: 90%; 
+      bottom: 10px; 
+    }
+    #videoControls button {
+      width: 45px;
+      height: 45px;
+    }
+    #videoControls button svg {
+      width: 20px;
+      height: 20px;
+    }
+    #mainContainer {
+      padding: 15px;
+      margin-bottom: 100px;
+      border-radius: 15px;
+    }
+    #roomPrompt {
+      padding: 15px;
+      margin: 15px auto;
+    }
+    #roomPrompt input {
+      padding: 10px 12px;
+      font-size: 0.9rem;
+    }
+    #roomPrompt button {
+      padding: 10px 18px;
+      font-size: 0.9rem;
+    }
+    #chat { 
+      max-width: 100%; 
+      padding: 15px; 
+    }
+    #chat h3 {
+      font-size: 1.2rem;
+    }
+    #chatInput {
+      font-size: 0.8rem;
+      padding: 8px 10px;
+    }
+    #chatSendBtn {
+      padding: 8px 14px;
+      font-size: 0.8rem;
+    }
+    #chatSendBtn svg {
+      width: 16px;
+      height: 16px;
+    }
+    #messages {
+      padding: 10px;
+    }
+    #messages p {
+      font-size: 0.8rem;
+      padding: 8px 12px;
+      max-width: 90%;
+    }
+    #messages span.username {
+      font-size: 0.9rem;
+    }
+    #messages span.timestamp {
+      font-size: 0.6rem;
+    }
+  }
+
+  @media(max-width: 480px){
+    #roomPrompt {
+      margin: 10px auto;
+      padding: 12px;
+    }
+    #mainContainer {
+      padding: 12px;
+      margin-bottom: 90px;
+    }
+    #videoControls {
+      padding: 8px;
+      gap: 8px;
+    }
+    #videoControls button {
+      width: 40px;
+      height: 40px;
+    }
+    #videoControls button svg {
+      width: 18px;
+      height: 18px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div id="roomPrompt">
+  <input id="roomInput" placeholder="Enter room code" autocomplete="off" />
+  <button id="joinBtn">
+    <svg viewBox="0 0 24 24"><path d="M18 7l-1.41-1.41-6.34 6.34 6.34 6.34L18 17l-6.34-6.34z"/></svg>
+    Join Room
+  </button>
+</div>
+
+<div id="mainContainer">
+  <div id="videoGrid">
+    <div class="videoWrapper">
+      <video id="remoteVideo" autoplay playsinline></video>
+      <div class="videoLabel" id="remoteName"></div>
+    </div>
+    <div class="videoWrapper">
+      <video id="localVideo" autoplay muted playsinline></video>
+      <div class="videoLabel" id="localName">You</div>
+    </div>
+  </div>
+
+  <div id="videoControls">
+    <button id="btnToggleAudio" title="Mute/Unmute">
+      <svg id="iconAudio" viewBox="0 0 24 24"><path d="M7 9v6h4l5 5V4l-5 5H7z"/></svg>
+    </button>
+    <button id="btnToggleVideo" title="Camera On/Off">
+      <svg id="iconVideo" viewBox="0 0 24 24"><path d="M17 10.5V7c0-1.1-.9-2-2-2H5a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-3.5l4 4v-11l-4 4z"/></svg>
+    </button>
+    <button id="btnScreenShare" title="Screen Share">
+      <svg id="iconScreen" viewBox="0 0 24 24"><path d="M21 16v-6h-6v6h6zm-8 0v-6H7v6h6z"/></svg>
+    </button>
+    <button id="btnChatToggle" title="Toggle Chat">
+      <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+    </button>
+    <button id="btnLeave" title="Leave Room">
+      <svg viewBox="0 0 24 24"><path d="M16 13v-2H7V8l-5 4 5 4v-3h9z"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="chat">
+  <h3>Chat</h3>
+  <div id="messages"></div>
+  <div id="chatInputArea">
+    <input id="chatInput" placeholder="Type a message..." />
+    <button id="chatSendBtn">
+      <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      Send
+    </button>
+  </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const socket = io();
+const peer = new RTCPeerConnection();
+let roomCode='', username='', localStream=null;
+let audioEnabled=true, videoEnabled=true, isScreenSharing=false;
+
+const localVideo=document.getElementById('localVideo');
+const remoteVideo=document.getElementById('remoteVideo');
+const btnToggleAudio=document.getElementById('btnToggleAudio');
+const btnToggleVideo=document.getElementById('btnToggleVideo');
+const btnScreenShare=document.getElementById('btnScreenShare');
+const btnChatToggle=document.getElementById('btnChatToggle');
+const btnLeave=document.getElementById('btnLeave');
+const chat=document.getElementById('chat');
+const messages=document.getElementById('messages');
+const localName=document.getElementById('localName');
+const remoteName=document.getElementById('remoteName');
+const iconAudio = document.getElementById('iconAudio');
+const iconVideo = document.getElementById('iconVideo');
+const iconScreen = document.getElementById('iconScreen');
+
+document.getElementById('joinBtn').addEventListener('click', async ()=>{
+  roomCode=document.getElementById('roomInput').value.trim();
+  if(!roomCode){ alert("Enter room code"); return; }
+  username=prompt("Enter your username:")||"You";
+  localName.textContent = username;
+  socket.emit('join',{room:roomCode, username});
+});
+
+btnChatToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  chat.classList.toggle('open');
+});
+
+document.getElementById('chatSendBtn').addEventListener('click', sendMessage);
+document.getElementById('chatInput').addEventListener('keydown', e=>{ if(e.key==='Enter') sendMessage(); });
+
+document.addEventListener('click', (e) => {
+  if (chat.classList.contains('open') && 
+      !chat.contains(e.target) && 
+      e.target !== btnChatToggle && 
+      !btnChatToggle.contains(e.target)) {
+    chat.classList.remove('open');
+  }
+});
+
+chat.addEventListener('click', (e) => {
+  e.stopPropagation();
+});
+
+async function startMedia(){
+  localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+  localVideo.srcObject=localStream;
+  localStream.getTracks().forEach(track=>peer.addTrack(track,localStream));
+}
+
+btnToggleAudio.addEventListener('click', ()=>{
+  audioEnabled=!audioEnabled;
+  localStream.getAudioTracks().forEach(t=>t.enabled=audioEnabled);
+  iconAudio.innerHTML = audioEnabled
+    ? '<path d="M7 9v6h4l5 5V4l-5 5H7z"/>'
+    : '<path d="M19 11c0-1.1-.9-2-2-2H12v-2h-2v2H5v2h5v2h2v-2h5c1.1 0 2-.9 2-2z"/>';
+});
+
+btnToggleVideo.addEventListener('click', ()=>{
+  videoEnabled=!videoEnabled;
+  localStream.getVideoTracks().forEach(t=>t.enabled=videoEnabled);
+  iconVideo.innerHTML = videoEnabled
+    ? '<path d="M17 10.5V7c0-1.1-.9-2-2-2H5a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-3.5l4 4v-11l-4 4z"/>'
+    : '<path d="M21 6.5l-3.5 3.5V7h-10v10h10v-3l3.5 3.5 1.5-1.5L3 5l1.5-1.5 16 16-1.5 1.5z"/>';
+});
+
+btnScreenShare.addEventListener('click', async ()=>{
+  if(!isScreenSharing){
+    const screenStream = await navigator.mediaDevices.getDisplayMedia({video:true});
+    const screenTrack = screenStream.getVideoTracks()[0];
+    const sender = peer.getSenders().find(s=>s.track.kind==='video');
+    await sender.replaceTrack(screenTrack);
+    screenTrack.onended=()=>{ 
+      peer.getSenders().find(s=>s.track.kind==='video').replaceTrack(localStream.getVideoTracks()[0]); 
+      isScreenSharing=false; 
+      iconScreen.innerHTML='<path d="M21 16v-6h-6v6h6zm-8 0v-6H7v6h6z"/>'; 
+    };
+    isScreenSharing=true;
+    iconScreen.innerHTML='<path d="M21 16h-6v-6h6v6zm-8 0H7v-6h6v6z" fill="yellow"/>'; 
+  } else {
+    peer.getSenders().find(s=>s.track.kind==='video').replaceTrack(localStream.getVideoTracks()[0]);
+    isScreenSharing=false;
+    iconScreen.innerHTML='<path d="M21 16v-6h-6v6h6zm-8 0v-6H7v6h6z"/>';
+  }
+});
+
+btnLeave.addEventListener('click', ()=>{
+  socket.emit('leave',{room: roomCode, username});
+  if(localStream) localStream.getTracks().forEach(track=>track.stop());
+  document.getElementById('mainContainer').style.display='none';
+  document.getElementById('roomPrompt').style.display='flex';
+  remoteVideo.srcObject = null;
+  roomCode = '';
+  username = '';
+  remoteName.textContent = '';
+});
+
+socket.on('joined', async data=>{
+  document.getElementById('roomPrompt').style.display='none';
+  document.getElementById('mainContainer').style.display='block';
+  await startMedia();
+  if(data.num_users>1){
+    const remoteUser = data.users.find(u => u !== username);
+    if(remoteUser) {
+      remoteName.textContent = remoteUser;
+      socket.emit('shareUsername', {room: roomCode, username, to: remoteUser});
+    }
+    const offer=await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    socket.emit('offer',{sdp:offer, room:roomCode});
+  }
+});
+
+socket.on('shareUsername', data => {
+  if(data.to === username) {
+    remoteName.textContent = data.username;
+  }
+});
+
+socket.on('offer', async offer=>{
+  await peer.setRemoteDescription(new RTCSessionDescription(offer));
+  const answer = await peer.createAnswer();
+  await peer.setLocalDescription(answer);
+  socket.emit('answer',{sdp:answer, room:roomCode});
+});
+
+socket.on('answer', async answer=>{
+  await peer.setRemoteDescription(new RTCSessionDescription(answer));
+});
+
+socket.on('candidate', async candidate=>{
+  await peer.addIceCandidate(new RTCIceCandidate(candidate));
+});
+
+peer.onicecandidate=e=>{
+  if(e.candidate) socket.emit('candidate',{candidate:e.candidate, room:roomCode});
+};
+peer.ontrack=e=>{
+  remoteVideo.srcObject=e.streams[0];
+};
+
+function getUsernameColor(name){
+  let hash=0;
+  for(let i=0;i<name.length;i++){ hash=name.charCodeAt(i)+((hash<<5)-hash); }
+  const hue = hash % 360;
+  return `hsl(${hue},65%,55%)`;
+}
+
+function sendMessage(){
+  const msg=document.getElementById('chatInput').value.trim();
+  if(!msg) return;
+  const timestamp=new Date().toLocaleTimeString();
+  socket.emit('message',{msg,room:roomCode,username,timestamp});
+  document.getElementById('chatInput').value='';
+}
+
+socket.on('message', data=>{
+  const p=document.createElement('p');
+  const isSelf=(data.username===username);
+  p.classList.add(isSelf?'self':'other');
+
+  const usernameSpan=document.createElement('span');
+  usernameSpan.classList.add('username');
+  usernameSpan.textContent=isSelf?'You':data.username;
+  usernameSpan.style.color=getUsernameColor(data.username);
+
+  const timeSpan=document.createElement('span');
+  timeSpan.classList.add('timestamp');
+  timeSpan.textContent=data.timestamp;
+
+  const msgSpan=document.createElement('span');
+  msgSpan.textContent=data.msg;
+
+  p.appendChild(usernameSpan);
+  p.appendChild(timeSpan);
+  p.appendChild(msgSpan);
+
+  messages.appendChild(p);
+  messages.scrollTop=messages.scrollHeight;
+});
+</script>
+</body>
+</html>
